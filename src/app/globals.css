@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Tokens de color (RGB sin función) consumidos por tailwind.config.ts.
+ * Tema claro por defecto; el tema oscuro se activa con la clase `.dark`
+ * sobre <html> (controlado por el ThemeToggle / preferencia del tenant).
+ */
+:root {
+  --surface: 255 255 255;
+  --surface-muted: 248 250 252;
+  --surface-elevated: 255 255 255;
+  --border: 226 232 240;
+  --content: 15 23 42;
+  --content-muted: 71 85 105;
+  --content-subtle: 148 163 184;
+}
+
+.dark {
+  --surface: 15 23 42;
+  --surface-muted: 2 6 23;
+  --surface-elevated: 30 41 59;
+  --border: 51 65 85;
+  --content: 248 250 252;
+  --content-muted: 148 163 184;
+  --content-subtle: 100 116 139;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+body {
+  background-color: rgb(var(--surface-muted));
+  color: rgb(var(--content));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar discreta y consistente entre módulos. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--content-subtle) / 0.4);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
