@@ -2,10 +2,13 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 export async function POST(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "config.editar");
+  if (perm) return perm;
 
   const form = await req.formData();
   const file = form.get("receipt");

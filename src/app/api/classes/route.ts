@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 const CLASS_TYPES = new Set(["crossfit", "spinning", "yoga", "funcional", "boxeo", "hiit"]);
 
@@ -45,6 +46,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "agenda.gestionar");
+  if (perm) return perm;
 
   const { title, roomId, coachId, type, start, end, capacity } = await req.json();
   if (!title || !roomId || !CLASS_TYPES.has(type) || !start || !end) {

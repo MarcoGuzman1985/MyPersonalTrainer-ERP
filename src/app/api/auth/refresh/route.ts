@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { rows } = await pool.query(
-    `SELECT su.id, su.tenant_id, su.force_password_change, r.name AS role_name,
+    `SELECT su.id, su.tenant_id, su.force_password_change, su.is_platform_admin, r.name AS role_name,
             COALESCE(array_agg(rp.permission_key) FILTER (WHERE rp.permission_key IS NOT NULL), '{}') AS permissions
      FROM staff_users su
      JOIN roles r ON r.id = su.role_id
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
     role: user.role_name,
     permissions: user.permissions,
     mustChangePassword: user.force_password_change,
+    isPlatformAdmin: user.is_platform_admin,
   });
 
   const res = NextResponse.json({ accessToken });

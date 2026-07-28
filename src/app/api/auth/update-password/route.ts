@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     role: auth.role,
     permissions: auth.permissions,
     mustChangePassword: false,
+    isPlatformAdmin: auth.isPlatformAdmin,
   });
 
   return NextResponse.json({ ok: true, accessToken });

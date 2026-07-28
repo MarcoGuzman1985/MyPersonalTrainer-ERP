@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 const SELECT_FIELDS = `
   id, first_name AS "firstName", last_name AS "lastName",
@@ -23,6 +24,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "agenda.gestionar");
+  if (perm) return perm;
 
   const { firstName, lastName, dob, phone, address, email, anthropometricData } = await req.json();
   if (!firstName || !lastName) {

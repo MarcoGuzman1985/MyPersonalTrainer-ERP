@@ -8,6 +8,7 @@ export interface AccessTokenPayload {
   role: string;
   permissions: string[];
   mustChangePassword: boolean;
+  isPlatformAdmin: boolean;
 }
 
 function secret() {

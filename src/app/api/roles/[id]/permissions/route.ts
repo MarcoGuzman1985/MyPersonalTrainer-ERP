@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool, withTransaction } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "config.usuarios");
+  if (perm) return perm;
 
   const { permissions } = await req.json();
   if (!Array.isArray(permissions)) {

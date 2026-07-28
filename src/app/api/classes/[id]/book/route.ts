@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withTransaction } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "agenda.reservar");
+  if (perm) return perm;
 
   const { memberId } = await req.json();
   if (!memberId) {

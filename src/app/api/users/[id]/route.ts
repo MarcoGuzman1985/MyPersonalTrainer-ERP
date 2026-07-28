@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 const STATUSES = new Set(["active", "invited", "disabled"]);
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "config.usuarios");
+  if (perm) return perm;
 
   const { name, email, roleId, status } = await req.json();
 
@@ -61,6 +64,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "config.usuarios");
+  if (perm) return perm;
 
   if (params.id === auth.sub) {
     return NextResponse.json({ error: "No puedes eliminar tu propia cuenta." }, { status: 400 });

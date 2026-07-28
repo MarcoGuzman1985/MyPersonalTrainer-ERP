@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "inventario.ajustar");
+  if (perm) return perm;
 
   const { name, price, stock } = await req.json();
   if (!name || typeof price !== "number" || price < 0) {
@@ -28,6 +31,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "inventario.ajustar");
+  if (perm) return perm;
 
   const { rowCount } = await pool.query(
     `UPDATE products SET is_active = false WHERE id = $1 AND tenant_id = $2`,

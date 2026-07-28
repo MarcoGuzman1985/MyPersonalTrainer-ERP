@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 const SELECT_FIELDS = `
   id, first_name AS "firstName", last_name AS "lastName",
@@ -12,6 +13,8 @@ const SELECT_FIELDS = `
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "agenda.gestionar");
+  if (perm) return perm;
 
   const { firstName, lastName, dob, phone, address, email, anthropometricData } = await req.json();
   if (!firstName || !lastName) {
@@ -37,6 +40,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "agenda.gestionar");
+  if (perm) return perm;
 
   try {
     const { rowCount } = await pool.query(

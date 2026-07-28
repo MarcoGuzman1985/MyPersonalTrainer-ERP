@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 async function assertMemberInTenant(memberId: string, tenantId: string) {
   const { rows } = await pool.query(
@@ -31,6 +32,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "clientes.editar");
+  if (perm) return perm;
 
   if (!(await assertMemberInTenant(params.id, auth.tenantId))) {
     return NextResponse.json({ error: "Socio no encontrado." }, { status: 404 });

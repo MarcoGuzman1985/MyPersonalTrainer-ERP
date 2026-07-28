@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool, withTransaction } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 import { isMemberLimitReached } from "@/lib/plan/limits";
 
 const LIST_QUERY = `
@@ -75,6 +76,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "clientes.crear");
+  if (perm) return perm;
 
   const body = await req.json();
   const { name, email, phone, gender, birthDate, avatarUrl, tags, subscription } = body ?? {};

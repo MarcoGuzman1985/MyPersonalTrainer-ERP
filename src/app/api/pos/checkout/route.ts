@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withTransaction } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 import { buildReceipt } from "@/lib/pos/receipt";
 import { sendMail } from "@/lib/mail/sendMail";
 import { formatCurrency } from "@/lib/utils";
@@ -10,6 +11,8 @@ const PAYMENT_METHODS = new Set(["cash", "card", "transfer", "wallet"]);
 export async function POST(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "pos.cobrar");
+  if (perm) return perm;
 
   const { customerId, paymentMethod, lines } = await req.json();
 

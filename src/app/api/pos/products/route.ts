@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { requireAuth } from "@/lib/auth/requireAuth";
+import { requirePermission } from "@/lib/auth/requirePermission";
 
 const KINDS = new Set(["product", "membership", "service"]);
 
@@ -22,6 +23,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const perm = requirePermission(auth, "inventario.ajustar");
+  if (perm) return perm;
 
   const { name, category, kind, price, stock, sku } = await req.json();
   if (!name || !category || !KINDS.has(kind) || typeof price !== "number" || price < 0) {
