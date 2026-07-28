@@ -1,20 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Upload, Save, Eye, EyeOff, Palette, Receipt, CreditCard, Globe, Image as ImageIcon,
+  Upload, Save, Eye, EyeOff, Palette, Receipt, CreditCard, Globe, Image as ImageIcon, FileUp,
 } from "lucide-react";
 import {
   PageHeader, Card, CardHeader, CardContent, Badge, Button,
   Input, Select, Field,
   Tabs, TabsList, TabsTrigger, TabsContent,
 } from "@/components/ui";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency, formatDateTime } from "@/lib/utils";
 import { tenantSettingsMock } from "@/lib/api/tenant-settings";
+import { getRenewals } from "@/lib/api/saas";
+import { RenewalUploadModal } from "@/components/modules/tenant-settings/RenewalUploadModal";
 import type {
   TenantSettings, GatewayConfig, GatewayProvider,
 } from "@/types/tenant-settings";
+import type { RenewalStatus, SubscriptionRenewal } from "@/types/saas";
 import type { Tone } from "@/types/shared";
+
+const renewalStatusMeta: Record<RenewalStatus, { label: string; tone: Tone }> = {
+  pending: { label: "Pendiente de revisión", tone: "warning" },
+  approved: { label: "Aprobado", tone: "success" },
+  rejected: { label: "Rechazado", tone: "danger" },
+};
 
 const gatewayMeta: Record<GatewayProvider, { label: string; hint: string }> = {
   stripe: { label: "Stripe", hint: "Tarjetas internacionales y suscripciones." },
@@ -48,6 +57,17 @@ export default function ConfiguracionPage() {
     tenantSettingsMock.branding.logoUrl,
   );
   const [saving, setSaving] = useState(false);
+  const [renewals, setRenewals] = useState<SubscriptionRenewal[]>([]);
+  const [renewalModalOpen, setRenewalModalOpen] = useState(false);
+
+  function refreshRenewals() {
+    getRenewals().then(setRenewals).catch(() => setRenewals([]));
+  }
+
+  useEffect(() => {
+    refreshRenewals();
+  }, []);
+
   const [revealed, setRevealed] = useState<Record<GatewayProvider, boolean>>({
     stripe: false,
     mercadopago: false,
@@ -112,6 +132,7 @@ export default function ConfiguracionPage() {
           <TabsTrigger value="marca">Marca</TabsTrigger>
           <TabsTrigger value="impuestos">Impuestos</TabsTrigger>
           <TabsTrigger value="pasarelas">Pasarelas de pago</TabsTrigger>
+          <TabsTrigger value="suscripcion">Suscripción</TabsTrigger>
         </TabsList>
 
         {/* ---------------------------- MARCA ---------------------------- */}
@@ -414,7 +435,51 @@ export default function ConfiguracionPage() {
             })}
           </div>
         </TabsContent>
+
+        {/* -------------------------- SUSCRIPCIÓN -------------------------- */}
+        <TabsContent value="suscripcion" className="mt-6">
+          <Card className="max-w-2xl">
+            <CardHeader
+              title={
+                <span className="flex items-center gap-2">
+                  <FileUp className="h-4 w-4 text-brand-800" /> Renovación de suscripción
+                </span>
+              }
+              description="Adjunta el comprobante de tu pago para que la plataforma renueve tu cuenta."
+              action={
+                <Button icon={FileUp} onClick={() => setRenewalModalOpen(true)}>
+                  Adjuntar comprobante
+                </Button>
+              }
+            />
+            <CardContent className="space-y-3">
+              {renewals.length === 0 ? (
+                <p className="text-sm text-content-subtle">Aún no has enviado ningún comprobante.</p>
+              ) : (
+                <ul className="divide-y divide-line rounded-lg border border-line">
+                  {renewals.map((r) => (
+                    <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                      <div>
+                        <p className="font-medium text-content">{formatCurrency(r.amount)}</p>
+                        <p className="text-xs text-content-subtle">{formatDateTime(r.createdAt)}</p>
+                      </div>
+                      <Badge tone={renewalStatusMeta[r.status].tone} dot>
+                        {renewalStatusMeta[r.status].label}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      <RenewalUploadModal
+        open={renewalModalOpen}
+        onClose={() => setRenewalModalOpen(false)}
+        onUploaded={refreshRenewals}
+      />
     </>
   );
 }

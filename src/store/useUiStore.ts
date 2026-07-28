@@ -12,6 +12,13 @@ interface UiState {
   /** Tema visual. */
   theme: "light" | "dark";
   toggleTheme: () => void;
+  /**
+   * Alta rápida de socio (Topbar). Se renderiza en el layout raíz (no dentro
+   * del propio Topbar) para evitar que el `fixed` del modal quede recortado
+   * por el stacking context que crea el `backdrop-blur` del header.
+   */
+  quickAddMemberOpen: boolean;
+  setQuickAddMemberOpen: (open: boolean) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -28,4 +35,6 @@ export const useUiStore = create<UiState>((set) => ({
       }
       return { theme };
     }),
+  quickAddMemberOpen: false,
+  setQuickAddMemberOpen: (quickAddMemberOpen) => set({ quickAddMemberOpen }),
 }));

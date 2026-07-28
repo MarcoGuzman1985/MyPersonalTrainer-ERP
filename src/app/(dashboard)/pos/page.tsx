@@ -1,39 +1,59 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search, ShoppingCart, Trash2, User, CheckCircle2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Search, ShoppingCart, Trash2, User, CheckCircle2, Receipt as ReceiptIcon, Settings } from "lucide-react";
 import {
   PageHeader, Card, CardContent, Button, Input, Select, Badge, Modal,
 } from "@/components/ui";
 import { cn, formatCurrency } from "@/lib/utils";
-import { usePosStore } from "@/store/usePosStore";
-import { posCategories, posProductsMock, posCustomersMock } from "@/lib/api/pos";
+import { usePosStore, type PosProduct } from "@/store/usePosStore";
+import { posCategories, getProducts, checkout } from "@/lib/api/pos";
+import { getMembers } from "@/lib/api/members";
+import { ApiError } from "@/lib/api/client";
+import type { Member } from "@/types/members";
 import { ProductCard } from "@/components/modules/pos/ProductCard";
 import { CartLineRow } from "@/components/modules/pos/CartLineRow";
 import { PaymentMethodPicker, paymentMeta } from "@/components/modules/pos/PaymentMethodPicker";
+import { BillingModal } from "@/components/modules/pos/BillingModal";
+import { CatalogManagerModal } from "@/components/modules/pos/CatalogManagerModal";
 
 const GENERAL_CUSTOMER = "__general__";
 
 export default function PosPage() {
-  // TODO(backend): cargar catálogo con getProducts() y clientes con getCustomers().
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [billingOpen, setBillingOpen] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [customers, setCustomers] = useState<Member[]>([]);
+  const [products, setProducts] = useState<PosProduct[]>([]);
 
   const {
     customerId, customerName, lines, paymentMethod, taxRate,
     setCustomer, setPaymentMethod, addItem, removeItem, setQty, clear, subtotal, total,
   } = usePosStore();
 
+  function refreshProducts() {
+    return getProducts().then(setProducts).catch(() => setProducts([]));
+  }
+
+  useEffect(() => {
+    getMembers({ pageSize: 100 })
+      .then((res) => setCustomers(res.data))
+      .catch(() => setCustomers([]));
+    refreshProducts();
+  }, []);
+
   const filteredProducts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return posProductsMock.filter((p) => {
+    return products.filter((p) => {
       const byCategory = !activeCategory || p.category === activeCategory;
       const byQuery = !q || p.name.toLowerCase().includes(q);
       return byCategory && byQuery;
     });
-  }, [activeCategory, query]);
+  }, [products, activeCategory, query]);
 
   const sub = subtotal();
   const tax = sub * taxRate;
@@ -46,16 +66,23 @@ export default function PosPage() {
       setCustomer(null, null);
       return;
     }
-    const found = posCustomersMock.find((c) => c.id === value);
+    const found = customers.find((c) => c.id === value);
     setCustomer(found?.id ?? null, found?.name ?? null);
   }
 
-  function handleConfirmCheckout() {
+  async function handleConfirmCheckout() {
     setCheckingOut(true);
-    // TODO(backend): POST /api/pos/checkout { customerId, lines, paymentMethod, total }
-    setCheckingOut(false);
-    setConfirmOpen(false);
-    clear();
+    setCheckoutError(null);
+    try {
+      const receipt = await checkout({ customerId, paymentMethod, lines });
+      setConfirmOpen(false);
+      clear();
+      window.open(`/print/receipt/${receipt.saleId}`, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setCheckoutError(err instanceof ApiError ? err.message : "No se pudo procesar el cobro.");
+    } finally {
+      setCheckingOut(false);
+    }
   }
 
   return (
@@ -64,11 +91,16 @@ export default function PosPage() {
         title="Punto de Venta"
         description="Cobra membresías y productos en mostrador con un par de toques."
         actions={
-          !isEmpty ? (
-            <Button variant="outline" icon={Trash2} onClick={clear}>
-              Vaciar
+          <div className="flex gap-2">
+            <Button variant="outline" icon={Settings} onClick={() => setCatalogOpen(true)}>
+              Administrar catálogo
             </Button>
-          ) : undefined
+            {!isEmpty && (
+              <Button variant="outline" icon={Trash2} onClick={clear}>
+                Vaciar
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -135,12 +167,21 @@ export default function PosPage() {
                   aria-label="Seleccionar cliente"
                 >
                   <option value={GENERAL_CUSTOMER}>Cliente general</option>
-                  {posCustomersMock.map((c) => (
+                  {customers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
                   ))}
                 </Select>
+                {customerId && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    icon={ReceiptIcon}
+                    aria-label="Actualizar datos de facturación"
+                    onClick={() => setBillingOpen(true)}
+                  />
+                )}
               </div>
 
               {/* Líneas */}
@@ -241,8 +282,26 @@ export default function PosPage() {
             <span className="font-semibold text-content">Total a cobrar</span>
             <span className="text-xl font-bold tabular-nums text-content">{formatCurrency(grandTotal)}</span>
           </div>
+
+          {checkoutError && <p className="text-sm text-red-600">{checkoutError}</p>}
         </div>
       </Modal>
+
+      {customerId && (
+        <BillingModal
+          open={billingOpen}
+          onClose={() => setBillingOpen(false)}
+          memberId={customerId}
+          memberName={customerName ?? ""}
+        />
+      )}
+
+      <CatalogManagerModal
+        open={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        products={products}
+        onChanged={refreshProducts}
+      />
     </>
   );
 }

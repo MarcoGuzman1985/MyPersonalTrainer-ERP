@@ -5,18 +5,20 @@ import { Save, Lock } from "lucide-react";
 import { Card, CardHeader, CardContent, Button, Select, Badge } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import type { PermissionModule, Role } from "@/types/users";
+import { updateRolePermissions } from "@/lib/api/users";
 import { Checkbox } from "./Checkbox";
 
 interface PermissionMatrixProps {
   roles: Role[];
   catalog: PermissionModule[];
+  onSaved?: () => void;
 }
 
 /**
  * Editor RBAC: selecciona un rol y alterna permisos granulares
  * agrupados por módulo. Mantiene estado local hasta "Guardar cambios".
  */
-export function PermissionMatrix({ roles, catalog }: PermissionMatrixProps) {
+export function PermissionMatrix({ roles, catalog, onSaved }: PermissionMatrixProps) {
   const [roleId, setRoleId] = useState<string>(roles[0]?.id ?? "");
   const selectedRole = useMemo(
     () => roles.find((r) => r.id === roleId) ?? roles[0],
@@ -59,14 +61,20 @@ export function PermissionMatrix({ roles, catalog }: PermissionMatrixProps) {
     });
   };
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleSave = async () => {
     if (!selectedRole) return;
     setSaving(true);
-    // TODO(backend): PUT /api/roles/:id/permissions
-    //   await updateRolePermissions(selectedRole.id, Array.from(granted));
-    await new Promise((r) => setTimeout(r, 600));
-    selectedRole.permissions = Array.from(granted); // optimista sobre el mock
-    setSaving(false);
+    setSaveError(null);
+    try {
+      await updateRolePermissions(selectedRole.id, Array.from(granted));
+      onSaved?.();
+    } catch {
+      setSaveError("No se pudieron guardar los permisos.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!selectedRole) return null;
@@ -113,6 +121,7 @@ export function PermissionMatrix({ roles, catalog }: PermissionMatrixProps) {
             <Badge tone="brand">{granted.size} permisos</Badge>
           </div>
         </div>
+        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {catalog.map((module) => {

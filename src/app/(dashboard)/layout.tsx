@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Topbar } from "@/components/layout/Topbar";
+import { GlobalQuickAddMember } from "@/components/layout/GlobalQuickAddMember";
+import { ToastViewport } from "@/components/ui";
 
 /**
  * Layout administrativo: Sidebar fijo (escritorio) + drawer (móvil) + Topbar
@@ -18,6 +20,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <div className="mx-auto max-w-7xl space-y-6 p-4 lg:p-6">{children}</div>
         </main>
       </div>
+      <ToastViewport />
+      <GlobalQuickAddMember />
     </div>
   );
 }

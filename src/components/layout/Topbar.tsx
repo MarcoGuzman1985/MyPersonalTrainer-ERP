@@ -1,11 +1,22 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Bell, Menu, Moon, Search, Sun } from "lucide-react";
-import { Avatar } from "@/components/ui";
+import { Bell, Menu, Moon, Search, Sun, UserPlus } from "lucide-react";
+import { Avatar, Button, Badge } from "@/components/ui";
 import { useSessionStore } from "@/store/useSessionStore";
 import { useUiStore } from "@/store/useUiStore";
 import { allNavItems } from "@/lib/navigation";
+import { getTenantUsage, type TenantUsage } from "@/lib/api/tenant";
+import type { Tone } from "@/types/shared";
+
+function usageTone(used: number, limit: number): Tone {
+  if (limit <= 0) return "neutral";
+  const pct = used / limit;
+  if (pct >= 1) return "danger";
+  if (pct >= 0.8) return "warning";
+  return "neutral";
+}
 
 export function Topbar() {
   const pathname = usePathname();
@@ -13,6 +24,12 @@ export function Topbar() {
   const setMobileNav = useUiStore((s) => s.setMobileNav);
   const theme = useUiStore((s) => s.theme);
   const toggleTheme = useUiStore((s) => s.toggleTheme);
+  const setQuickAddMemberOpen = useUiStore((s) => s.setQuickAddMemberOpen);
+  const [usage, setUsage] = useState<TenantUsage | null>(null);
+
+  useEffect(() => {
+    getTenantUsage().then(setUsage).catch(() => setUsage(null));
+  }, []);
 
   const current = allNavItems.find((i) => pathname.startsWith(i.href));
 
@@ -40,6 +57,26 @@ export function Topbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-1 md:ml-0">
+        {usage && (
+          <div className="mr-2 hidden items-center gap-1.5 lg:flex">
+            <Badge tone={usageTone(usage.membersUsed, usage.membersLimit)}>
+              Socios: {usage.membersUsed}/{usage.membersLimit >= 99999 ? "∞" : usage.membersLimit}
+            </Badge>
+            <Badge tone={usageTone(usage.seatsUsed, usage.seatsLimit)}>
+              Usuarios: {usage.seatsUsed}/{usage.seatsLimit}
+            </Badge>
+          </div>
+        )}
+        <Button size="sm" icon={UserPlus} onClick={() => setQuickAddMemberOpen(true)} className="mr-1 hidden sm:inline-flex">
+          Alta rápida de socio
+        </Button>
+        <Button
+          size="icon"
+          icon={UserPlus}
+          aria-label="Alta rápida de socio"
+          onClick={() => setQuickAddMemberOpen(true)}
+          className="mr-1 sm:hidden"
+        />
         <button onClick={toggleTheme} className="rounded-lg p-2 text-content-muted hover:bg-surface-muted" aria-label="Cambiar tema">
           {theme === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
         </button>

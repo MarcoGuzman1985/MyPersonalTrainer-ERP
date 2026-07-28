@@ -1,19 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { Users, ShieldCheck, MailPlus, MoreHorizontal, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Users, ShieldCheck, MailPlus, UserPlus, ShieldPlus } from "lucide-react";
 import {
   PageHeader, StatCard, Card, CardHeader, CardContent, Badge, DataTable, Button, Avatar,
   type Column,
 } from "@/components/ui";
 import { formatDateTime } from "@/lib/utils";
 import {
-  permissionCatalogMock, rolesMock, staffMock, usersMetricsMock,
+  getUsersMetrics, getStaff, getRoles, getPermissionCatalog, updateStaff, deleteStaff,
 } from "@/lib/api/users";
-import type { StaffStatus, StaffUser } from "@/types/users";
+import type { PermissionModule, Role, StaffStatus, StaffUser, UsersMetrics } from "@/types/users";
 import type { Tone } from "@/types/shared";
 import { PermissionMatrix } from "@/components/modules/users/PermissionMatrix";
 import { InviteUserModal } from "@/components/modules/users/InviteUserModal";
+import { EditStaffModal } from "@/components/modules/users/EditStaffModal";
+import { NewRoleModal } from "@/components/modules/users/NewRoleModal";
+import { StaffRowActions } from "@/components/modules/users/StaffRowActions";
 
 const statusMeta: Record<StaffStatus, { label: string; tone: Tone }> = {
   active: { label: "Activo", tone: "success" },
@@ -21,11 +24,41 @@ const statusMeta: Record<StaffStatus, { label: string; tone: Tone }> = {
   disabled: { label: "Inactivo", tone: "neutral" },
 };
 
+const emptyMetrics: UsersMetrics = { activeUsers: 0, rolesCount: 0, pendingInvites: 0 };
+
 export default function UsuariosPage() {
-  // TODO(backend): sustituir mocks por getMetrics()/getStaff()/getRoles()/getPermissionCatalog() en un hook de datos.
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const metrics = usersMetricsMock;
+  const [newRoleOpen, setNewRoleOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
+  const [metrics, setMetrics] = useState<UsersMetrics>(emptyMetrics);
+  const [staff, setStaff] = useState<StaffUser[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [catalog, setCatalog] = useState<PermissionModule[]>([]);
+
+  function refreshAll() {
+    setLoading(true);
+    return Promise.all([
+      getUsersMetrics().then(setMetrics).catch(() => setMetrics(emptyMetrics)),
+      getStaff().then(setStaff).catch(() => setStaff([])),
+      getRoles().then(setRoles).catch(() => setRoles([])),
+      getPermissionCatalog().then(setCatalog).catch(() => setCatalog([])),
+    ]).finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    refreshAll();
+  }, []);
+
+  async function handleToggleStatus(u: StaffUser) {
+    await updateStaff(u.id, { status: u.status === "disabled" ? "active" : "disabled" });
+    refreshAll();
+  }
+
+  async function handleDelete(u: StaffUser) {
+    await deleteStaff(u.id);
+    refreshAll();
+  }
 
   const columns: Column<StaffUser>[] = [
     {
@@ -61,9 +94,13 @@ export default function UsuariosPage() {
       key: "actions",
       header: "",
       align: "right",
-      cell: () => (
-        // TODO(backend): menú de acciones (editar rol, desactivar, reenviar invitación).
-        <Button variant="ghost" size="icon" icon={MoreHorizontal} aria-label="Acciones" />
+      cell: (u) => (
+        <StaffRowActions
+          staff={u}
+          onEdit={() => setEditingStaff(u)}
+          onToggleStatus={() => handleToggleStatus(u)}
+          onDelete={() => handleDelete(u)}
+        />
       ),
     },
   ];
@@ -74,9 +111,10 @@ export default function UsuariosPage() {
         title="Usuarios y Permisos"
         description="Gestiona el personal del gimnasio y sus accesos mediante roles (RBAC)."
         actions={
-          <Button icon={UserPlus} onClick={() => setInviteOpen(true)}>
-            Invitar usuario
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" icon={ShieldPlus} onClick={() => setNewRoleOpen(true)}>Nuevo rol</Button>
+            <Button icon={UserPlus} onClick={() => setInviteOpen(true)}>Invitar usuario</Button>
+          </div>
         }
       />
 
@@ -91,7 +129,7 @@ export default function UsuariosPage() {
         <CardContent className="p-0">
           <DataTable
             columns={columns}
-            rows={staffMock}
+            rows={staff}
             rowKey={(u) => u.id}
             loading={loading}
             emptyMessage="Aún no hay usuarios. Invita a tu equipo para empezar."
@@ -99,16 +137,33 @@ export default function UsuariosPage() {
         </CardContent>
       </Card>
 
-      <PermissionMatrix roles={rolesMock} catalog={permissionCatalogMock} />
+      {roles.length > 0 && catalog.length > 0 && (
+        <PermissionMatrix
+          roles={roles}
+          catalog={catalog}
+          onSaved={() => getRoles().then(setRoles).catch(() => {})}
+        />
+      )}
 
       <InviteUserModal
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
-        roles={rolesMock}
-        onInvite={(input) => {
-          // TODO(backend): refrescar lista de staff tras invitar.
-          console.info("Invitación enviada (mock):", input);
-        }}
+        roles={roles}
+        onInvited={refreshAll}
+      />
+
+      <NewRoleModal
+        open={newRoleOpen}
+        onClose={() => setNewRoleOpen(false)}
+        onCreated={() => getRoles().then(setRoles).catch(() => {})}
+      />
+
+      <EditStaffModal
+        open={editingStaff !== null}
+        onClose={() => setEditingStaff(null)}
+        staff={editingStaff}
+        roles={roles}
+        onSaved={refreshAll}
       />
     </>
   );

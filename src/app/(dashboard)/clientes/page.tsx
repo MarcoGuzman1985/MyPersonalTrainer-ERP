@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { UserCheck, CalendarClock, Snowflake, UserPlus, Search, X } from "lucide-react";
 import {
   PageHeader, StatCard, Card, CardHeader, CardContent, Badge, Avatar, DataTable,
   Button, Input, Select, type Column,
 } from "@/components/ui";
 import { formatDate, cn } from "@/lib/utils";
-import { membersMetricsMock, membersMock } from "@/lib/api/members";
+import { getMembers, getMembersMetrics } from "@/lib/api/members";
 import { MemberProfile, statusMeta } from "@/components/modules/members/MemberProfile";
-import type { Member, MembershipStatus } from "@/types/members";
+import { NewMemberModal } from "@/components/modules/members/NewMemberModal";
+import type { Member, MembersMetrics, MembershipStatus } from "@/types/members";
 
 type StatusFilter = MembershipStatus | "all";
 
@@ -20,29 +21,41 @@ const statusFilterOptions: { value: StatusFilter; label: string }[] = [
   { value: "frozen", label: "Congeladas" },
 ];
 
+const emptyMetrics: MembersMetrics = {
+  active: 0, activeDelta: 0, expiringThisWeek: 0, frozen: 0, newThisMonth: 0, newThisMonthDelta: 0,
+};
+
 export default function ClientesPage() {
-  // TODO(backend): sustituir mocks por getMembersMetrics()/getMembers({search,status,page})
-  // en un effect/hook de datos (apiFetch). Mantener `loading` para el skeleton.
-  const [loading] = useState(false);
-  const metrics = membersMetricsMock;
+  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState<MembersMetrics>(emptyMetrics);
+  const [rows, setRows] = useState<Member[]>([]);
 
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   // Socio seleccionado -> abre el panel de Perfil 360° a la derecha.
   const [selected, setSelected] = useState<Member | null>(null);
 
-  // Filtrado en cliente sobre el mock. En backend este filtrado vive en la query.
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return membersMock.filter((m) => {
-      const matchesQuery =
-        q.length === 0 ||
-        m.name.toLowerCase().includes(q) ||
-        m.email.toLowerCase().includes(q) ||
-        m.phone.toLowerCase().includes(q);
-      const matchesStatus = status === "all" || m.subscription.status === status;
-      return matchesQuery && matchesStatus;
-    });
+  const [modalOpen, setModalOpen] = useState(false);
+
+  function refreshMetrics() {
+    getMembersMetrics().then(setMetrics).catch(() => setMetrics(emptyMetrics));
+  }
+
+  function refreshMembers() {
+    setLoading(true);
+    return getMembers({ search: query, status })
+      .then((res) => setRows(res.data))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    refreshMetrics();
+  }, []);
+
+  useEffect(() => {
+    const timeout = setTimeout(refreshMembers, 300);
+    return () => clearTimeout(timeout);
   }, [query, status]);
 
   const columns: Column<Member>[] = [
@@ -86,7 +99,7 @@ export default function ClientesPage() {
       <PageHeader
         title="Clientes y membresías"
         description="Cartera de socios con su perfil 360°: datos, suscripción, antropométricos y asistencia."
-        actions={<Button icon={UserPlus}>Nuevo socio</Button>}
+        actions={<Button icon={UserPlus} onClick={() => setModalOpen(true)}>Nuevo socio</Button>}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -150,6 +163,15 @@ export default function ClientesPage() {
           </div>
         )}
       </div>
+
+      <NewMemberModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={() => {
+          refreshMembers();
+          refreshMetrics();
+        }}
+      />
     </>
   );
 }

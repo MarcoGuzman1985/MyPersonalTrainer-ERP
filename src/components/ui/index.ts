@@ -10,4 +10,6 @@ export { Progress } from "./Progress";
 export { StatCard } from "./StatCard";
 export { DataTable, type Column } from "./DataTable";
 export { Modal } from "./Modal";
+export { Drawer } from "./Drawer";
+export { ToastViewport } from "./Toast";
 export { PageHeader } from "./PageHeader";
