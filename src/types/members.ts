@@ -67,6 +67,14 @@ export interface Member {
   attendance: AttendanceRecord[];
 }
 
+/** Datos fiscales del socio, usados al facturar desde el POS. */
+export interface MemberBillingProfile {
+  legalName: string;
+  taxId: string;
+  billingEmail: string;
+  address: string;
+}
+
 /** Métricas agregadas de la cartera de socios. */
 export interface MembersMetrics {
   active: number;

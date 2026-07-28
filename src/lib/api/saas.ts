@@ -1,55 +1,103 @@
-import type { PlanDefinition, SaaSMetrics, Tenant } from "@/types/saas";
+import { apiFetch } from "@/lib/api/client";
+import type {
+  IntegrationProvider, PlanDefinition, SaaSMetrics, SubscriptionRenewal, Tenant, TenantIntegration,
+} from "@/types/saas";
 
-/**
- * Capa de datos del módulo Admin SaaS.
- * MOCK para demo de UI. Para conectar el backend, reemplazar los retornos por:
- *   getMetrics  -> apiFetch<SaaSMetrics>("/admin/metrics")
- *   getTenants  -> apiFetch<Paginated<Tenant>>("/admin/tenants?page=…")
- *   getPlans    -> apiFetch<PlanDefinition[]>("/admin/plans")
- */
+export function getSaasMetrics() {
+  return apiFetch<SaaSMetrics>("/saas/metrics");
+}
 
-export const saasMetricsMock: SaaSMetrics = {
-  mrr: 48250,
-  mrrDelta: 12.4,
-  activeTenants: 142,
-  activeTenantsDelta: 8.1,
-  trials: 23,
-  churnRate: 2.3,
-};
+export function getPlans() {
+  return apiFetch<PlanDefinition[]>("/saas/plans");
+}
 
-export const plansMock: PlanDefinition[] = [
-  {
-    id: "lite",
-    name: "Lite",
-    monthlyPrice: 29,
-    maxMembers: 150,
-    maxSeats: 2,
-    features: ["Clientes y membresías", "POS básico", "Agenda de clases"],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    monthlyPrice: 79,
-    maxMembers: 600,
-    maxSeats: 8,
-    highlighted: true,
-    features: ["Todo en Lite", "Entrenamiento y nutrición", "CRM y leads", "Control de accesos"],
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    monthlyPrice: 199,
-    maxMembers: 99999,
-    maxSeats: 50,
-    features: ["Todo en Pro", "Mensajería masiva", "Marca blanca total", "API e integraciones", "Soporte dedicado"],
-  },
-];
+export function getTenants() {
+  return apiFetch<Tenant[]>("/saas/tenants");
+}
 
-export const tenantsMock: Tenant[] = [
-  { id: "tnt_1", name: "Iron Box CrossFit", owner: "Marco Guzmán", plan: "pro", status: "active", mrr: 79, members: 312, seats: 8, createdAt: "2024-03-12", renewsAt: "2026-06-12" },
-  { id: "tnt_2", name: "PowerHouse Gym", owner: "Lucía Fernández", plan: "enterprise", status: "active", mrr: 199, members: 1840, seats: 24, createdAt: "2023-11-01", renewsAt: "2026-06-01" },
-  { id: "tnt_3", name: "FitZone Studio", owner: "Diego Ramírez", plan: "lite", status: "trial", mrr: 0, members: 64, seats: 2, createdAt: "2026-05-02", renewsAt: "2026-06-02" },
-  { id: "tnt_4", name: "Élite Performance", owner: "Carla Méndez", plan: "pro", status: "past_due", mrr: 79, members: 410, seats: 6, createdAt: "2024-07-20", renewsAt: "2026-05-20" },
-  { id: "tnt_5", name: "Box 23 Atletas", owner: "Javier Soto", plan: "pro", status: "active", mrr: 79, members: 287, seats: 5, createdAt: "2025-01-15", renewsAt: "2026-07-15" },
-  { id: "tnt_6", name: "Trainer Ana López", owner: "Ana López", plan: "lite", status: "suspended", mrr: 0, members: 28, seats: 1, createdAt: "2024-09-09", renewsAt: "2026-04-09" },
-];
+export interface CreateTenantInput {
+  gymName: string;
+  ownerName: string;
+  ownerEmail: string;
+  tempPassword: string;
+  plan: string;
+  trialDays: number;
+}
+
+export function createTenant(input: CreateTenantInput) {
+  return apiFetch<Tenant>("/saas/tenants", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function getRenewals() {
+  return apiFetch<SubscriptionRenewal[]>("/saas/renewals");
+}
+
+export function uploadRenewalReceipt(amount: number, file: File) {
+  const formData = new FormData();
+  formData.append("amount", String(amount));
+  formData.append("receipt", file);
+  return apiFetch<SubscriptionRenewal>("/saas/renewals/upload", { method: "POST", body: formData });
+}
+
+export interface UpdateTenantInput {
+  status?: Tenant["status"];
+  owner?: string;
+  ownerEmail?: string;
+  plan?: string;
+  monthlyPrice?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export function updateTenant(id: string, input: UpdateTenantInput) {
+  return apiFetch<Tenant>(`/saas/tenants/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function resetTenantPassword(id: string, tempPassword?: string) {
+  return apiFetch<{ ownerEmail: string; tempPassword: string; emailSent: boolean }>(
+    `/saas/tenants/${id}/reset-password`,
+    { method: "POST", body: JSON.stringify({ tempPassword }) },
+  );
+}
+
+export interface UpdatePlanInput {
+  monthlyPrice: number;
+  maxMembers: number;
+  maxSeats: number;
+}
+
+export function updatePlan(id: string, input: UpdatePlanInput) {
+  return apiFetch<PlanDefinition>(`/saas/plans/${id}`, { method: "PUT", body: JSON.stringify(input) });
+}
+
+export interface CreatePlanInput {
+  id: string;
+  name: string;
+  monthlyPrice: number;
+  maxMembers: number;
+  maxSeats: number;
+  features: string[];
+  highlighted?: boolean;
+}
+
+export function createPlan(input: CreatePlanInput) {
+  return apiFetch<PlanDefinition>("/saas/plans", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function deletePlan(id: string) {
+  return apiFetch<{ ok: true }>(`/saas/plans/${id}`, { method: "DELETE" });
+}
+
+export function getTenantIntegrations(tenantId: string) {
+  return apiFetch<TenantIntegration[]>(`/saas/tenants/${tenantId}/integrations`);
+}
+
+export function updateTenantIntegration(
+  tenantId: string,
+  provider: IntegrationProvider,
+  input: { credentials: Record<string, unknown>; isActive: boolean },
+) {
+  return apiFetch<TenantIntegration>(`/saas/tenants/${tenantId}/integrations`, {
+    method: "PUT",
+    body: JSON.stringify({ provider, ...input }),
+  });
+}

@@ -10,7 +10,7 @@ export interface PosProduct {
   category: string;
   /** Distingue membresías de productos físicos. */
   kind: "product" | "membership";
-  stock?: number;
+  stock?: number | null;
 }
 
 export interface CartLine extends PosProduct {
