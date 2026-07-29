@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 export async function GET(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `SELECT r.id, r.name, r.description, r.is_system AS "isSystem",
        COALESCE(array_agg(rp.permission_key) FILTER (WHERE rp.permission_key IS NOT NULL), '{}') AS permissions
      FROM roles r
@@ -30,7 +31,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { rows } = await pool.query(
+    const { rows } = await tenantQuery(
+      auth,
       `INSERT INTO roles (tenant_id, name, description, is_system)
        VALUES ($1, $2, $3, false)
        RETURNING id, name, description, is_system AS "isSystem"`,

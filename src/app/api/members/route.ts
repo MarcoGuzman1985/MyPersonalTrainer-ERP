@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool, withTransaction } from "@/lib/db";
+import { tenantQuery, tenantTransaction } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 import { isMemberLimitReached } from "@/lib/plan/limits";
 
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
   const pageSize = Math.min(100, Math.max(1, Number(searchParams.get("pageSize") ?? 50)));
 
-  const { rows } = await pool.query(LIST_QUERY, [
+  const { rows } = await tenantQuery(auth, LIST_QUERY, [
     auth.tenantId,
     search || null,
     status || null,
@@ -83,12 +83,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Faltan campos requeridos." }, { status: 400 });
   }
 
-  if (await isMemberLimitReached(auth.tenantId)) {
+  if (await isMemberLimitReached(auth)) {
     return NextResponse.json({ error: "Límite del plan alcanzado" }, { status: 403 });
   }
 
   try {
-    const member = await withTransaction(async (client) => {
+    const member = await tenantTransaction(auth, async (client) => {
       const { rows: memberRows } = await client.query(
         `INSERT INTO members (tenant_id, name, email, phone, gender, birth_date, avatar_url, tags)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)

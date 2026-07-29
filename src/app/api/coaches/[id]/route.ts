@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 const SELECT_FIELDS = `
@@ -18,7 +18,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: "Nombre y apellido son requeridos." }, { status: 400 });
   }
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `UPDATE coaches SET
        first_name = $1, last_name = $2, dob = $3, phone = $4,
        address = $5, email = $6, anthropometric_data = $7
@@ -39,7 +40,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { rowCount } = await pool.query(
+    const { rowCount } = await tenantQuery(
+      auth,
       `DELETE FROM coaches WHERE id = $1 AND tenant_id = $2`,
       [params.id, auth.tenantId],
     );

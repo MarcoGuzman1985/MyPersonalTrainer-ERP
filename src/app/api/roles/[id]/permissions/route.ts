@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool, withTransaction } from "@/lib/db";
+import { tenantQuery, tenantTransaction } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
@@ -11,7 +11,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: "`permissions` debe ser un array." }, { status: 400 });
   }
 
-  const { rows: roleRows } = await pool.query(
+  const { rows: roleRows } = await tenantQuery(
+    auth,
     `SELECT id FROM roles WHERE id = $1 AND tenant_id = $2`,
     [params.id, auth.tenantId],
   );
@@ -20,7 +21,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 
   try {
-    await withTransaction(async (client) => {
+    await tenantTransaction(auth, async (client) => {
       await client.query(`DELETE FROM role_permissions WHERE role_id = $1`, [params.id]);
       for (const key of permissions) {
         await client.query(

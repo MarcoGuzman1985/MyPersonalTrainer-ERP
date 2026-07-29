@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withTransaction } from "@/lib/db";
+import { tenantTransaction } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
-    const result = await withTransaction(async (client) => {
+    const result = await tenantTransaction(auth, async (client) => {
       const { rows: memberRows } = await client.query(
         `SELECT id FROM members WHERE id = $1 AND tenant_id = $2`,
         [memberId, auth.tenantId],

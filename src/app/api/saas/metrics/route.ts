@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { platformTransaction } from "@/lib/db/tenantQuery";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 
 export async function GET(req: NextRequest) {
   const auth = await requirePlatformAdmin(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { rows } = await pool.query(`
+  const { rows } = await platformTransaction((client) => client.query(`
     SELECT
       COALESCE(SUM(monthly_price) FILTER (WHERE status = 'active'), 0) AS mrr,
       COUNT(*) FILTER (WHERE status = 'active') AS active_tenants,
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
       COUNT(*) FILTER (WHERE status = 'suspended') AS suspended_tenants,
       COUNT(*) AS total_tenants
     FROM tenants
-  `);
+  `));
 
   const r = rows[0];
   const total = Number(r.total_tenants);

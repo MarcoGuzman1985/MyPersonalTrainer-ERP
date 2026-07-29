@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 import { isSeatLimitReached } from "@/lib/plan/limits";
 import { hashPassword } from "@/lib/auth/password";
@@ -10,7 +10,8 @@ export async function GET(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `SELECT su.id, su.name, su.email, su.avatar_url AS "avatarUrl",
             su.role_id AS "roleId", r.name AS "roleName", su.status,
             su.last_active_at AS "lastActiveAt"
@@ -33,7 +34,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Faltan campos requeridos." }, { status: 400 });
   }
 
-  const { rows: roleRows } = await pool.query(
+  const { rows: roleRows } = await tenantQuery(
+    auth,
     `SELECT id FROM roles WHERE id = $1 AND tenant_id = $2`,
     [roleId, auth.tenantId],
   );
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "El rol no existe para este tenant." }, { status: 400 });
   }
 
-  if (await isSeatLimitReached(auth.tenantId)) {
+  if (await isSeatLimitReached(auth)) {
     return NextResponse.json({ error: "Límite del plan alcanzado" }, { status: 403 });
   }
 
@@ -49,7 +51,8 @@ export async function POST(req: NextRequest) {
   const passwordHash = await hashPassword(tempPassword);
 
   try {
-    const { rows } = await pool.query(
+    const { rows } = await tenantQuery(
+      auth,
       `WITH inserted AS (
          INSERT INTO staff_users (tenant_id, name, email, role_id, status, password_hash, force_password_change)
          VALUES ($1, $2, $3, $4, 'invited', $5, true)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
@@ -11,7 +11,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: "Datos de producto inválidos." }, { status: 400 });
   }
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `UPDATE products SET name = $1, price = $2, stock = $3
      WHERE id = $4 AND tenant_id = $5
      RETURNING id, name, price, category, kind, stock`,
@@ -29,7 +30,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { rowCount } = await pool.query(
+  const { rowCount } = await tenantQuery(
+    auth,
     `UPDATE products SET is_active = false WHERE id = $1 AND tenant_id = $2`,
     [params.id, auth.tenantId],
   );

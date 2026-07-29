@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
@@ -11,7 +11,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: "Datos de sala inválidos." }, { status: 400 });
   }
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `UPDATE rooms SET name = $1, capacity = $2, status = $3, notes = $4
      WHERE id = $5 AND tenant_id = $6
      RETURNING id, name, capacity, status, notes`,
@@ -29,7 +30,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { rowCount } = await pool.query(
+    const { rowCount } = await tenantQuery(
+      auth,
       `DELETE FROM rooms WHERE id = $1 AND tenant_id = $2`,
       [params.id, auth.tenantId],
     );

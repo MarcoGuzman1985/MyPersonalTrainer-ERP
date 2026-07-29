@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { authTransaction } from "@/lib/db/tenantQuery";
 import { signAccessToken } from "@/lib/auth/jwt";
 import { rotateRefreshToken } from "@/lib/auth/refreshTokens";
 
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     return res;
   }
 
-  const { rows } = await pool.query(
+  const { rows } = await authTransaction((client) => client.query(
     `SELECT su.id, su.tenant_id, su.force_password_change, r.name AS role_name,
             COALESCE(array_agg(rp.permission_key) FILTER (WHERE rp.permission_key IS NOT NULL), '{}') AS permissions
      FROM staff_users su
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
      WHERE su.id = $1
      GROUP BY su.id, r.name`,
     [rotated.staffUserId],
-  );
+  ));
   const user = rows[0];
   if (!user) {
     return NextResponse.json({ error: "Usuario no encontrado." }, { status: 401 });

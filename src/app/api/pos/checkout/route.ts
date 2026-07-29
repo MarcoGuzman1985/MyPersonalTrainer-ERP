@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withTransaction } from "@/lib/db";
+import { tenantTransaction } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 import { buildReceipt } from "@/lib/pos/receipt";
 import { sendMail } from "@/lib/mail/sendMail";
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const saleId = await withTransaction(async (client) => {
+    const saleId = await tenantTransaction(auth, async (client) => {
       if (customerId) {
         const { rows } = await client.query(
           `SELECT id FROM members WHERE id = $1 AND tenant_id = $2`,
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
       return saleId;
     });
 
-    const receipt = await buildReceipt(saleId, auth.tenantId);
+    const receipt = await buildReceipt(saleId, auth);
 
     // Envío de recibo por correo: no se espera (fire-and-forget) para no
     // retrasar la respuesta del cobro al cajero.

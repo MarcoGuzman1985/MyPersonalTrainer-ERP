@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 export async function POST(req: NextRequest) {
@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
   // TODO: Integrar subida a Google Drive API mediante Service Account.
   const receiptUrl = `https://drive.placeholder.internal/receipts/${randomUUID()}-${encodeURIComponent(file.name)}`;
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `INSERT INTO subscription_renewals (tenant_id, amount, receipt_url)
      VALUES ($1, $2, $3)
      RETURNING id, amount, receipt_url AS "receiptUrl", status, created_at AS "createdAt"`,

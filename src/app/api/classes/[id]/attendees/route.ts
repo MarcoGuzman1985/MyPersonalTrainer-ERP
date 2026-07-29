@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `SELECT cb.id, m.id AS "memberId", m.name, m.avatar_url AS "avatarUrl", cb.waitlisted
      FROM class_bookings cb
      JOIN members m ON m.id = cb.member_id

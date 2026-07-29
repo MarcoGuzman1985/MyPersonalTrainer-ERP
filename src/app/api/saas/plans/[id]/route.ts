@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
+import { platformTransaction } from "@/lib/db/tenantQuery";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
@@ -35,10 +36,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const auth = await requirePlatformAdmin(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { rows: activeRows } = await pool.query(
+  const { rows: activeRows } = await platformTransaction((client) => client.query(
     `SELECT count(*)::int AS count FROM tenants WHERE plan = $1 AND status = 'active'`,
     [params.id],
-  );
+  ));
   if (activeRows[0].count > 0) {
     return NextResponse.json(
       { error: `No se puede eliminar: ${activeRows[0].count} inquilino(s) activo(s) usan este plan.` },

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 const KINDS = new Set(["product", "membership", "service"]);
@@ -8,7 +8,8 @@ export async function GET(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `SELECT id, name, price, category, kind, stock
      FROM products
      WHERE tenant_id = $1 AND is_active = true
@@ -28,7 +29,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Datos de producto inválidos." }, { status: 400 });
   }
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `INSERT INTO products (tenant_id, sku, name, category, kind, price, stock)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id, name, price, category, kind, stock`,

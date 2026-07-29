@@ -1,7 +1,12 @@
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 
-export async function buildReceipt(saleId: string, tenantId: string) {
-  const { rows: saleRows } = await pool.query(
+interface TenantAuth {
+  tenantId: string;
+}
+
+export async function buildReceipt(saleId: string, auth: TenantAuth) {
+  const { rows: saleRows } = await tenantQuery(
+    auth,
     `SELECT s.id, s.created_at AS "createdAt", s.payment_method AS "paymentMethod",
             s.subtotal, s.tax_rate AS "taxRate", s.total,
             t.name AS "tenantName",
@@ -16,19 +21,21 @@ export async function buildReceipt(saleId: string, tenantId: string) {
      JOIN staff_users su ON su.id = s.staff_user_id
      LEFT JOIN members m ON m.id = s.member_id
      WHERE s.id = $1 AND s.tenant_id = $2`,
-    [saleId, tenantId],
+    [saleId, auth.tenantId],
   );
   const sale = saleRows[0];
   if (!sale) return null;
 
-  const { rows: lines } = await pool.query(
+  const { rows: lines } = await tenantQuery(
+    auth,
     `SELECT name, price, qty FROM sale_lines WHERE sale_id = $1 ORDER BY name`,
     [saleId],
   );
 
   let subscription = null;
   if (sale.memberId) {
-    const { rows: subRows } = await pool.query(
+    const { rows: subRows } = await tenantQuery(
+      auth,
       `SELECT plan, status, start_date AS "startDate", end_date AS "endDate"
        FROM member_subscriptions WHERE member_id = $1 AND is_current = true LIMIT 1`,
       [sale.memberId],

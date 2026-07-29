@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { platformTransaction } from "@/lib/db/tenantQuery";
 
 // Endpoint de servidor-a-servidor (n8n), no usa JWT de usuario: se protege
 // con un token estático compartido vía header.
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   // El primer staff_user creado en el tenant es su dueño (así se crea el
   // registro en POST /api/saas/tenants), de ahí se toma el contacto.
-  const { rows } = await pool.query(`
+  const { rows } = await platformTransaction((client) => client.query(`
     SELECT t.id AS "tenantId", t.name AS "gymName", t.owner AS "ownerName",
            t.plan, t.renews_at AS "renewsAt",
            owner_staff.email AS "ownerEmail"
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     ) owner_staff ON true
     WHERE t.renews_at::date = (current_date + 10)
     ORDER BY t.renews_at ASC
-  `);
+  `));
 
   return NextResponse.json({
     checkedAt: new Date().toISOString(),

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { authTransaction } from "@/lib/db/tenantQuery";
 import { verifyPassword } from "@/lib/auth/password";
 import { signAccessToken } from "@/lib/auth/jwt";
 import { issueRefreshToken } from "@/lib/auth/refreshTokens";
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "tenantId, email y password son requeridos." }, { status: 400 });
   }
 
-  const { rows } = await pool.query(
+  const { rows } = await authTransaction((client) => client.query(
     `SELECT su.id, su.password_hash, su.status, su.name, su.force_password_change, r.name AS role_name,
             COALESCE(array_agg(rp.permission_key) FILTER (WHERE rp.permission_key IS NOT NULL), '{}') AS permissions
      FROM staff_users su
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
      WHERE su.tenant_id = $1 AND su.email = $2
      GROUP BY su.id, r.name`,
     [tenantId, email],
-  );
+  ));
 
   const user = rows[0];
   // "invited" con password_hash ya asignado = aún no completa su primer login
@@ -49,7 +49,9 @@ export async function POST(req: NextRequest) {
     ip: req.headers.get("x-forwarded-for") ?? undefined,
   });
 
-  await pool.query(`UPDATE staff_users SET last_active_at = now() WHERE id = $1`, [user.id]);
+  await authTransaction((client) =>
+    client.query(`UPDATE staff_users SET last_active_at = now() WHERE id = $1`, [user.id]),
+  );
 
   const res = NextResponse.json({
     accessToken,

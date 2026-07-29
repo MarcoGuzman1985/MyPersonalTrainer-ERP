@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { platformTransaction } from "@/lib/db/tenantQuery";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { hashPassword } from "@/lib/auth/password";
 import { sendMail } from "@/lib/mail/sendMail";
@@ -14,27 +14,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     ? String(body.tempPassword)
     : generateTempPassword();
 
-  const { rows: ownerRows } = await pool.query(
-    `SELECT id, email FROM staff_users
-     WHERE tenant_id = $1
-     ORDER BY created_at ASC
-     LIMIT 1`,
-    [params.id],
-  );
-  const owner = ownerRows[0];
+  const passwordHash = await hashPassword(tempPassword);
+
+  const owner = await platformTransaction(async (client) => {
+    const { rows: ownerRows } = await client.query(
+      `SELECT id, email FROM staff_users
+       WHERE tenant_id = $1
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [params.id],
+    );
+    const owner = ownerRows[0];
+    if (!owner) return null;
+
+    await client.query(
+      `UPDATE staff_users SET password_hash = $1, force_password_change = true WHERE id = $2`,
+      [passwordHash, owner.id],
+    );
+    await client.query(
+      `UPDATE refresh_tokens SET revoked_at = now() WHERE staff_user_id = $1 AND revoked_at IS NULL`,
+      [owner.id],
+    );
+    return owner;
+  });
+
   if (!owner) {
     return NextResponse.json({ error: "El inquilino no tiene un usuario dueño." }, { status: 404 });
   }
-
-  const passwordHash = await hashPassword(tempPassword);
-  await pool.query(
-    `UPDATE staff_users SET password_hash = $1, force_password_change = true WHERE id = $2`,
-    [passwordHash, owner.id],
-  );
-  await pool.query(
-    `UPDATE refresh_tokens SET revoked_at = now() WHERE staff_user_id = $1 AND revoked_at IS NULL`,
-    [owner.id],
-  );
 
   let emailSent = true;
   try {

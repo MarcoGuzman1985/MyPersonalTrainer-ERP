@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 const STATUSES = new Set(["active", "invited", "disabled"]);
@@ -17,7 +17,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   if (name !== undefined) { sets.push(`name = $${i++}`); values.push(name); }
   if (email !== undefined) { sets.push(`email = $${i++}`); values.push(email); }
   if (roleId !== undefined) {
-    const { rows } = await pool.query(`SELECT id FROM roles WHERE id = $1 AND tenant_id = $2`, [roleId, auth.tenantId]);
+    const { rows } = await tenantQuery(auth, `SELECT id FROM roles WHERE id = $1 AND tenant_id = $2`, [roleId, auth.tenantId]);
     if (rows.length === 0) {
       return NextResponse.json({ error: "El rol no existe para este tenant." }, { status: 400 });
     }
@@ -37,7 +37,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   values.push(params.id, auth.tenantId);
 
   try {
-    const { rows } = await pool.query(
+    const { rows } = await tenantQuery(
+      auth,
       `UPDATE staff_users SET ${sets.join(", ")}
        WHERE id = $${i++} AND tenant_id = $${i}
        RETURNING id, name, email, avatar_url AS "avatarUrl", role_id AS "roleId", status, last_active_at AS "lastActiveAt"`,
@@ -47,7 +48,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: "Usuario no encontrado." }, { status: 404 });
     }
 
-    const { rows: roleRows } = await pool.query(`SELECT name FROM roles WHERE id = $1`, [rows[0].roleId]);
+    const { rows: roleRows } = await tenantQuery(auth, `SELECT name FROM roles WHERE id = $1`, [rows[0].roleId]);
 
     return NextResponse.json({ ...rows[0], roleName: roleRows[0]?.name ?? "" });
   } catch (err: unknown) {
@@ -68,7 +69,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   // Borrado lógico: nunca se elimina la fila para no romper auditoría/ventas
   // históricas que referencian a este staff_user.
-  const { rowCount } = await pool.query(
+  const { rowCount } = await tenantQuery(
+    auth,
     `UPDATE staff_users SET status = 'disabled' WHERE id = $1 AND tenant_id = $2`,
     [params.id, auth.tenantId],
   );

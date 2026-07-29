@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool, withTransaction } from "@/lib/db";
+import { platformTransaction } from "@/lib/db/tenantQuery";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { hashPassword } from "@/lib/auth/password";
 
@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const auth = await requirePlatformAdmin(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { rows } = await pool.query(`
+  const { rows } = await platformTransaction((client) => client.query(`
     SELECT t.id, t.name, t.owner, t.plan, t.status,
            t.monthly_price AS mrr, t.seats, t.metadata,
            t.created_at AS "createdAt", t.renews_at AS "renewsAt",
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
            (SELECT email FROM staff_users su WHERE su.tenant_id = t.id ORDER BY su.created_at ASC LIMIT 1) AS "ownerEmail"
     FROM tenants t
     ORDER BY t.created_at DESC
-  `);
+  `));
 
   return NextResponse.json(rows.map((r) => ({ ...r, mrr: Number(r.mrr) })));
 }
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const tenant = await withTransaction(async (client) => {
+    const tenant = await platformTransaction(async (client) => {
       const { rows: planRows } = await client.query(
         `SELECT monthly_price FROM plan_definitions WHERE id = $1`,
         [plan],

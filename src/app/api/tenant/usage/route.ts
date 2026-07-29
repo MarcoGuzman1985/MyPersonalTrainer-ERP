@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { tenantQuery } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 
 export async function GET(req: NextRequest) {
   const auth = requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
-  const { rows } = await pool.query(
+  const { rows } = await tenantQuery(
+    auth,
     `SELECT pd.max_members AS "membersLimit", pd.max_seats AS "seatsLimit",
             (SELECT count(*)::int FROM members WHERE tenant_id = t.id) AS "membersUsed",
             (SELECT count(*)::int FROM staff_users
