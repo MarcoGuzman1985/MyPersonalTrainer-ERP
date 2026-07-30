@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { tenantTransaction } from "@/lib/db/tenantQuery";
 import { requireAuth } from "@/lib/auth/requireAuth";
 import { buildReceipt } from "@/lib/pos/receipt";
-import { sendMail } from "@/lib/mail/sendMail";
+import { enqueueMail } from "@/lib/mail/sendMail";
 import { formatCurrency } from "@/lib/utils";
 
 const PAYMENT_METHODS = new Set(["cash", "card", "transfer", "wallet"]);
@@ -22,12 +22,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const saleId = await tenantTransaction(auth, async (client) => {
+      let customerEmail: string | null = null;
       if (customerId) {
         const { rows } = await client.query(
-          `SELECT id FROM members WHERE id = $1 AND tenant_id = $2`,
+          `SELECT id, email FROM members WHERE id = $1 AND tenant_id = $2`,
           [customerId, auth.tenantId],
         );
         if (rows.length === 0) throw new Error("El cliente no pertenece a este tenant.");
+        customerEmail = rows[0].email;
       }
 
       const productIds: string[] = lines.map((l: { productId: string }) => l.productId);
@@ -51,10 +53,15 @@ export async function POST(req: NextRequest) {
       }
 
       const { rows: settingsRows } = await client.query(
-        `SELECT tax_rate FROM tenant_settings WHERE tenant_id = $1`,
+        `SELECT ts.tax_rate, ts.currency, t.name AS tenant_name
+         FROM tenant_settings ts
+         JOIN tenants t ON t.id = ts.tenant_id
+         WHERE ts.tenant_id = $1`,
         [auth.tenantId],
       );
       const taxRate = Number(settingsRows[0]?.tax_rate ?? 0);
+      const currency = settingsRows[0]?.currency ?? "USD";
+      const tenantName = settingsRows[0]?.tenant_name ?? "";
       const total = subtotal + subtotal * taxRate;
 
       const { rows: saleRows } = await client.query(
@@ -83,26 +90,34 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Recibo por correo: encolado en emails_outbox dentro de esta misma
+      // transacción (mismo `client`) — si el INSERT falla, la venta entera
+      // hace rollback. Mejor una venta que no cerró que una venta cerrada
+      // sin recibo persistido para reintento (ver Tanda 4, /api/mailer/flush).
+      if (customerEmail) {
+        const itemsHtml = lines
+          .map((l: { productId: string; qty: number }) => {
+            const product = byId.get(l.productId)!;
+            return `<li>${l.qty}x ${product.name} — ${formatCurrency(Number(product.price) * l.qty, currency)}</li>`;
+          })
+          .join("");
+        await enqueueMail(
+          auth,
+          {
+            to: customerEmail,
+            subject: `Tu recibo de compra — Folio ${saleId.slice(0, 8).toUpperCase()}`,
+            html: `<p>Gracias por tu compra en ${tenantName}.</p>
+             <ul>${itemsHtml}</ul>
+             <p><b>Total: ${formatCurrency(total, currency)}</b></p>`,
+          },
+          client,
+        );
+      }
+
       return saleId;
     });
 
     const receipt = await buildReceipt(saleId, auth);
-
-    // Envío de recibo por correo: no se espera (fire-and-forget) para no
-    // retrasar la respuesta del cobro al cajero.
-    if (receipt?.customer?.email) {
-      const itemsHtml = receipt.lines
-        .map((l) => `<li>${l.qty}x ${l.name} — ${formatCurrency(l.lineTotal, receipt.tenant.currency)}</li>`)
-        .join("");
-      sendMail(
-        receipt.customer.email,
-        `Tu recibo de compra — Folio ${receipt.saleId.slice(0, 8).toUpperCase()}`,
-        `<p>Gracias por tu compra en ${receipt.tenant.name}.</p>
-         <ul>${itemsHtml}</ul>
-         <p><b>Total: ${formatCurrency(receipt.total, receipt.tenant.currency)}</b></p>`,
-      ).catch((err) => console.error("No se pudo enviar el recibo por correo:", err));
-    }
-
     return NextResponse.json(receipt, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "No se pudo procesar el cobro.";
