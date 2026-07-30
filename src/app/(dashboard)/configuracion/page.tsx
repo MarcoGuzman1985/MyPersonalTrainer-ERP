@@ -110,6 +110,11 @@ export default function ConfiguracionPage() {
   function handleSave() {
     setSaving(true);
     // TODO(backend): PUT /api/tenant/settings con el cuerpo `settings`.
+    // Para `gateways[].secretKey`: payment_gateways.secret_key_enc ya existe
+    // (cifrado con pgcrypto, ver db/migrations/027_encrypt_credentials.sql y
+    // src/lib/crypto/pgcrypto.ts). El handler debe usar pgp_sym_encrypt/
+    // pgp_sym_decrypt con PGCRYPTO_KEY como bind parameter, igual que
+    // src/app/api/saas/tenants/[id]/integrations/route.ts.
     setTimeout(() => setSaving(false), 800);
   }
 

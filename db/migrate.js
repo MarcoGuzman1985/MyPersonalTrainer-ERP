@@ -42,9 +42,28 @@ async function main() {
     for (const file of files) {
       if (applied.has(file)) continue;
       const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), "utf8");
+
+      // Migraciones marcadas como destructivas/manuales (ver 028) se saltan
+      // salvo que se confirme explícitamente el nombre exacto del archivo,
+      // para no aplicarlas por accidente junto con una migración normal.
+      if (sql.includes("-- APLICAR MANUALMENTE") && process.env.CONFIRM_DESTRUCTIVE_MIGRATION !== file) {
+        console.log(`-> Saltando ${file} (requiere CONFIRM_DESTRUCTIVE_MIGRATION=${file})`);
+        continue;
+      }
+
       console.log(`-> Aplicando ${file}`);
       await client.query("BEGIN");
       try {
+        // Migraciones que cifran/descifran con pgcrypto esperan la clave en
+        // app.pgcrypto_key. Se inyecta aquí como bind parameter (nunca
+        // hardcodeada en el .sql) y a nivel de sesión (is_local=false) para
+        // que sobreviva al BEGIN/COMMIT de esta transacción.
+        if (sql.includes("app.pgcrypto_key")) {
+          if (!process.env.PGCRYPTO_KEY) {
+            throw new Error(`Falta PGCRYPTO_KEY en el entorno — requerida por ${file}.`);
+          }
+          await client.query("SELECT set_config('app.pgcrypto_key', $1, false)", [process.env.PGCRYPTO_KEY]);
+        }
         await client.query(sql);
         await client.query("INSERT INTO schema_migrations (id) VALUES ($1)", [file]);
         await client.query("COMMIT");

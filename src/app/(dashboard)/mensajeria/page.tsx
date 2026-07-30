@@ -96,6 +96,10 @@ export default function MensajeriaPage() {
 
   function handleTestConnection() {
     // TODO(backend): POST /api/messaging/evolution/test con instanceName/baseUrl/apiKey.
+    // Al conectar: evolution_configs.api_key_enc ya existe (cifrado con pgcrypto,
+    // ver db/migrations/027_encrypt_credentials.sql y src/lib/crypto/pgcrypto.ts).
+    // El handler debe usar pgp_sym_encrypt/pgp_sym_decrypt con PGCRYPTO_KEY como
+    // bind parameter, igual que src/app/api/saas/tenants/[id]/integrations/route.ts.
     setTesting(true);
     setTimeout(() => setTesting(false), 900);
   }

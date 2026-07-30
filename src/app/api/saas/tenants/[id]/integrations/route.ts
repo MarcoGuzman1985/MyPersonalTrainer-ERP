@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { platformTransaction } from "@/lib/db/tenantQuery";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { PGCRYPTO_KEY } from "@/lib/crypto/pgcrypto";
 
 const PROVIDERS = ["google_calendar", "meta", "whatsapp", "gemini"] as const;
 
@@ -8,10 +9,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const auth = await requirePlatformAdmin(req);
   if (auth instanceof NextResponse) return auth;
 
+  // credentials_enc nunca sale de aquí en crudo: se descifra con
+  // pgp_sym_decrypt en el propio SELECT y solo se devuelve el JSON lógico.
   const { rows } = await platformTransaction((client) => client.query(
-    `SELECT provider, credentials, is_active AS "isActive"
-     FROM tenant_integrations WHERE tenant_id = $1`,
-    [params.id],
+    `SELECT provider, pgp_sym_decrypt(credentials_enc, $1)::jsonb AS credentials, is_active AS "isActive"
+     FROM tenant_integrations WHERE tenant_id = $2`,
+    [PGCRYPTO_KEY, params.id],
   ));
   const byProvider = new Map(rows.map((r) => [r.provider, r]));
 
@@ -41,12 +44,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (tenantRows.length === 0) return null;
 
     const { rows } = await client.query(
-      `INSERT INTO tenant_integrations (tenant_id, provider, credentials, is_active)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO tenant_integrations (tenant_id, provider, credentials_enc, is_active)
+       VALUES ($1, $2, pgp_sym_encrypt($3::text, $4), $5)
        ON CONFLICT (tenant_id, provider) DO UPDATE SET
-         credentials = EXCLUDED.credentials, is_active = EXCLUDED.is_active
-       RETURNING provider, credentials, is_active AS "isActive"`,
-      [params.id, provider, JSON.stringify(credentials), Boolean(isActive)],
+         credentials_enc = EXCLUDED.credentials_enc, is_active = EXCLUDED.is_active
+       RETURNING provider, pgp_sym_decrypt(credentials_enc, $4)::jsonb AS credentials, is_active AS "isActive"`,
+      [params.id, provider, JSON.stringify(credentials), PGCRYPTO_KEY, Boolean(isActive)],
     );
     return rows[0];
   });
