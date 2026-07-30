@@ -1,0 +1,43 @@
+# Requiere APP_BASE_URL pública. Fallará mientras la app esté solo en localhost.
+#
+# Dos jobs cron independientes contra el mismo deploy:
+#   - flush-mailer: drena db/migrations/029_emails_outbox.sql (Tanda 4) cada
+#     5 minutos. La granularidad mínima real de GitHub Actions es ~5 min
+#     (*/1 se aceptaría en la sintaxis pero no se garantiza precisión
+#     sub-5min); el backoff exponencial del outbox ya empieza en 1 minuto,
+#     así que 5-10 min de retraso ocasional del runner no cambia el SLA
+#     humano percibido.
+#   - expiring-trials: invoca diariamente el webhook heredado de n8n
+#     (GET /api/webhooks/expiring-trials), hoy sin otro invocador.
+#
+# Ambos jobs comparten el mismo secreto de autenticación
+# (X-Webhook-Token: CRON_WEBHOOK_TOKEN) que ya usan sus respectivos
+# endpoints. Ver docs/deployment.md para cómo configurar los secretos y
+# la nota sobre workflows programados que se pausan tras 60 días sin
+# actividad en el repo.
+name: Cron scheduler
+
+on:
+  schedule:
+    - cron: "*/5 * * * *" # flush-mailer
+    - cron: "0 8 * * *" # expiring-trials (08:00 UTC, ajustable)
+  workflow_dispatch: {}
+
+jobs:
+  flush-mailer:
+    if: github.event.schedule == '*/5 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/mailer/flush
+        run: |
+          curl -fsS --max-time 60 -X POST "${{ secrets.APP_BASE_URL }}/api/mailer/flush" \
+            -H "X-Webhook-Token: ${{ secrets.CRON_WEBHOOK_TOKEN }}"
+
+  expiring-trials:
+    if: github.event.schedule == '0 8 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: GET /api/webhooks/expiring-trials
+        run: |
+          curl -fsS --max-time 30 "${{ secrets.APP_BASE_URL }}/api/webhooks/expiring-trials" \
+            -H "X-Webhook-Token: ${{ secrets.CRON_WEBHOOK_TOKEN }}"
