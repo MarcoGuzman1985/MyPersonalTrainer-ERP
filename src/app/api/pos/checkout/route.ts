@@ -94,6 +94,12 @@ export async function POST(req: NextRequest) {
       // transacción (mismo `client`) — si el INSERT falla, la venta entera
       // hace rollback. Mejor una venta que no cerró que una venta cerrada
       // sin recibo persistido para reintento (ver Tanda 4, /api/mailer/flush).
+      //
+      // Trade-off explícito: un fallo del INSERT a emails_outbox —
+      // extremadamente raro en la práctica (sería un problema de la propia
+      // BD, no de SMTP) — bloquea el cobro completo. Si algún día ves un
+      // checkout fallando con un error de "emails_outbox", esta es la causa
+      // raíz: es intencional, no un bug.
       if (customerEmail) {
         const itemsHtml = lines
           .map((l: { productId: string; qty: number }) => {
