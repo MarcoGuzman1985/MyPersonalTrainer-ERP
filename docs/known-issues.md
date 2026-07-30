@@ -38,16 +38,27 @@ para forzar que todas sus sesiones activas re-autentiquen con el nuevo shape,
 en vez de dejar sesiones mixtas (unas con JWT viejo, otras con el nuevo) convivir
 silenciosamente.
 
-**Hallazgo secundario (fuera de alcance de este issue, dejar registrado):**
-`src/store/useSessionStore.ts` sigue siendo un store mock — `setSession()` nunca
-se invoca desde el flujo real de login, así que `user`/`tenant` en ese store son
-siempre los valores mock hardcodeados (incluyendo `"saas.view"` en los permisos
-mock). Esto no causa los 401 de este issue porque `Sidebar`/`Topbar` no disparan
-fetches basados en ese store, pero sí significa que el link "Admin SaaS" del
-sidebar se muestra a **cualquier** usuario logueado, no solo a platform admins
-(el backend igual lo bloquea con 403 vía `requirePlatformAdmin`, así que no es un
-hueco de seguridad, pero sí ruido de UX). Recomendado abordarlo en una tanda de
-UI/auth aparte.
+**Mini-mejora de UX pendiente (no urgente):** los fetchers a nivel de página
+(`saas/page.tsx`, `usuarios/page.tsx`, etc.) no usan `AbortController` en su
+`useEffect` de carga. Si el usuario navega fuera de la página antes de que la
+petición resuelva, la respuesta llega igual y se procesa contra un componente
+ya desmontado — probablemente la causa de los 401 "fantasma" en consola
+descritos arriba. Envolver esos fetchers en un `AbortController` con cleanup
+(`return () => controller.abort()`) silenciaría la consola y evitaría procesar
+responses obsoletos. No bloquea nada, queda como mejora futura.
+
+**Hallazgo secundario — elevado a tarea propia:** el `useSessionStore` mock
+(`src/store/useSessionStore.ts`) no es "ruido de UX" menor — ver
+[Tanda 4bis: hidratación real de sesión](./tanda-4bis-session-hydration.md).
+`Sidebar.can(permission)` filtra los 14 módulos contra permisos mock (no los
+reales del JWT), así que cualquier usuario logueado ve los 14 links de
+navegación, no solo los que su rol real permite. `Topbar` además muestra
+"Marco Guzmán / Superadministrador" hardcoded sin importar quién inició sesión
+(p. ej. Laura de PowerHouse vería el nombre de Marco). El backend bloquea el
+daño real (Tanda 1 + Tanda 2 responden 403/404 en cada endpoint), pero la UI le
+miente al usuario sobre quién es y qué puede tocar. Programado en paralelo al
+outbox (Tanda 4), no bloquea Tanda 3 ni Tanda 4, pero debe resolverse antes de
+conectar más módulos al backend.
 
 **Smoke test:** `scripts/smoke-users.js` cubre el ciclo de vida completo (login
 admin → invitar → login invitado + cambio de password → suspender → reactivar →
